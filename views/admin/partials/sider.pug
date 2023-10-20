@@ -3,5 +3,19 @@
     ul 
       li
         a(href=`/${prefixAdmin}/dashboard`) Tổng quan
-      li
-        a(href=`/${prefixAdmin}/products`) Sản phẩm
+      if(role.permission.includes("products_view"))  
+        li
+          a(href=`/${prefixAdmin}/products`) Sản phẩm
+      if(role.permission.includes("products-category_view"))  
+        li
+          a(href=`/${prefixAdmin}/products-category`) Danh muc Sản phẩm
+      if(role.permission.includes("roles_view"))  
+      
+        li
+          a(href=`/${prefixAdmin}/roles`) Nhom quyen
+      if(role.permission.includes("roles_permissions"))  
+        li
+          a(href=`/${prefixAdmin}/roles/permission`) Phan quyen
+      if(role.permission.includes("accounts_view"))  
+        li
+          a(href=`/${prefixAdmin}/accounts`) Tai khoan

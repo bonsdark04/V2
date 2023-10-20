@@ -11,27 +11,36 @@ const systemConfig = require("./config/system.js");
 const flash = require("express-flash");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
+const path = require('path');
+const moment = require('moment');
+
+
+
+
+//TinyMCE
+app.use('/tinymce', express.static(path.join(__dirname, 'node_modules', 'tinymce')));
+//ENd TinyMCE
+
 database.connect();
 
 app.set("views",`${__dirname}/views`);
 app.set('view engine','pug')
+
 //Flash
 app.use(cookieParser("LHNASDASDAD"));
 app.use(session({ cookie: { maxAge: 60000 } }));
 app.use(flash());
 // END Flash
+
 app.use(express.static(`${__dirname}/public`));
 app.use(methodOverride('_method'));
 app.use(bodyParser.urlencoded({ extended: false }));
 route(app);
 AdminRoute(app);
 
-
-
-
-
 //Variables
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
+app.locals.moment = moment;
 //End Variables
 
 app.listen(port, () => {

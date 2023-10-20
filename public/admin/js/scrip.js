@@ -196,4 +196,43 @@ if(uploadImage){
 }
 
 // END Upload IMAGE
-//end
+// SORT
+const  sort = document.querySelector("[sort]");
+let url = new URL(window.location.href);
+    //Sap xep
+if(sort){
+    
+    const sortSelect = sort.querySelector("[sort-select]");
+    const sortClear = sort.querySelector("[sort-clear]");
+    sortSelect.addEventListener("change",(e)=>{
+        const value = e.target.value;
+        const [sortKey,sortValue] = value.split("-");
+        url.searchParams.set("sortKey",sortKey);
+        url.searchParams.set("sortValue",sortValue);
+        window.location.href = url.href;
+        
+    })
+
+    //End sap xep
+    //Clear
+    
+    sortClear.addEventListener("click",()=>{
+        url.searchParams.delete("sortKey");
+        url.searchParams.delete("sortValue");
+        window.location.href = url.href;
+    })
+    //End Clear
+
+    
+    //Lua chon mac dinh
+    const sortKey = url.searchParams.get("sortKey");
+    const sortValue = url.searchParams.get("sortValue");
+    if( sortKey && sortValue ){
+        const stringSort = `${sortKey}-${sortValue}`;
+        const chooseOption = sort.querySelector(`option[value='${stringSort}']`);
+        chooseOption.selected = true;
+    }
+
+    //END Lua chon mac dinh
+}
+// END SORT
