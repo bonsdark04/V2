@@ -23,16 +23,17 @@ module.exports.index = async(req,res)=>{
     if(req.query.keyword) {
         find.title = objSearch.regex;
     }
-    let initPagination = {
-        currentPage: 1,
-        limitItem: 5
-    }
+    
     let sort={};
     if(req.query.sortKey && req.query.sortValue !=""){
         sort[req.query.sortKey] = req.query.sortValue;
     }
     else{
         sort.position = "desc";
+    }
+    let initPagination = {
+        currentPage: 1,
+        limitItem: 5
     }
     let countProduct = await Product.count(find);
     const paginationObject = pagination(initPagination,req.query,countProduct);

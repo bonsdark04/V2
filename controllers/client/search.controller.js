@@ -14,6 +14,7 @@ module.exports.index = async (req, res) => {
             deleted: false,
             status: "active"
         });
+        
         newProducts = productsHelper.priceNewProducts(products);
     }
     

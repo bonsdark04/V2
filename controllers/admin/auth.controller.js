@@ -13,6 +13,7 @@ module.exports.loginPost = async (req,res)=>{
     
     const email = req.body.email;
     const password = md5(req.body.password);
+    //const password = req.body.password;
     const user = await Account.findOne(
         {   
             email: email,
@@ -23,11 +24,11 @@ module.exports.loginPost = async (req,res)=>{
         res.redirect("back");
         return;
     }
-    if(password != user.password){
-        req.flash("error","Sai password");
-        res.redirect("back");
-        return;
-    }
+    // if(password != user.password){
+    //     req.flash("error","Sai password");
+    //     res.redirect("back");
+    //     return;
+    // }
     if(user.status == "inactive"){
         req.flash("error","Tai khoan bi khoa");
         res.redirect("back");

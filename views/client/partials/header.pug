@@ -6,7 +6,7 @@ header.header
       .col-3
         .inner-logo
           a(href="/")
-            img(src="/images/logo.svg", alt="Logo")
+            img(src=settingGeneral.logo, alt="Logo")
       .col-5
         form(
           action="/search"
@@ -36,3 +36,18 @@ header.header
                 +sub-menu(categoryLayout, pathProduct)
             li 
               a(href="/cart") Giỏ hàng (#{miniCart ? miniCart.totalQuantity: "0"})
+            if(user)
+              li 
+                a(href="/user/logout") Đăng xuất
+              li 
+                a(href="/user/info") #{user.fullName}
+              li 
+                a(href="/users/friends") Danh sách bạn bè  
+              li 
+                a(href="/rooms-chat") Phòng chat 
+              
+            else 
+              li 
+                a(href="/user/login") Đăng nhập
+              li 
+                a(href="/user/register") Đăng ký

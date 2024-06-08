@@ -13,7 +13,8 @@ const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const path = require('path');
 const moment = require('moment');
-
+const http = require("http");
+const { Server } = require("socket.io");
 
 
 
@@ -35,14 +36,27 @@ app.use(flash());
 app.use(express.static(`${__dirname}/public`));
 app.use(methodOverride('_method'));
 app.use(bodyParser.urlencoded({ extended: false }));
+
+//Route
 route(app);
 AdminRoute(app);
+app.get("*", (req, res) => {
+  res.render("client/pages/error/page404", {
+    pageTitle: "404 Not Found",
+  });
+});
+//End Route
+
+// SocketIO
+const server = http.createServer(app);
+const io = new Server(server);
+global._io = io;
 
 //Variables
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
 app.locals.moment = moment;
 //End Variables
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
