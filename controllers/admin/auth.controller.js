@@ -24,11 +24,11 @@ module.exports.loginPost = async (req,res)=>{
         res.redirect("back");
         return;
     }
-    // if(password != user.password){
-    //     req.flash("error","Sai password");
-    //     res.redirect("back");
-    //     return;
-    // }
+    if(password != user.password){
+        req.flash("error","Sai password");
+        res.redirect("back");
+        return;
+    }
     if(user.status == "inactive"){
         req.flash("error","Tai khoan bi khoa");
         res.redirect("back");
