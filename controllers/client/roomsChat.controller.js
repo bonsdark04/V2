@@ -1,52 +1,75 @@
 const User = require("../../models/user.model");
+const Account = require("../../models/account.model");
 const RoomChat = require("../../models/room-chat.model");
-
 
 //[GET] /rooms-chat
 module.exports.index = async (req,res)=>{
-    res.render("client/pages/rooms-chat/index");
-}
-
-//[GET] /rooms-chat/create
-module.exports.create = async (req,res)=>{
-    const friendList = res.locals.user.friendList;
-    for(const friend of friendList){
-        const infoFriend = await User.findOne({
-            _id: friend.user_id
-        }).select("fullName avatar");
-        friend.infoFriend = infoFriend;
-
-    }
-
-    res.render("client/pages/rooms-chat/create",{
-        pageTitle: "Tạo phòng",
-        friendList: friendList
+    const userId = res.locals.user.id;
+    
+    // Tìm room chat hỗ trợ của user này
+    let supportRoom = await RoomChat.findOne({
+        typeRoom: "support",
+        "users.user_id": userId,
+        deleted: false
     });
-}
 
-//[POST] /rooms-chat/create
-module.exports.createPost = async (req,res)=>{
-    const groupTitle = req.body.title;
-    const usersId = req.body.usersId;
-    console.log(usersId);
-    console.log(req.body);
-    const dataChat ={
-        title: groupTitle,
-        typeRoom: "group",
-        users: []
-    };
+    // Nếu chưa có room chat hỗ trợ, tạo mới
+    if (!supportRoom) {
+        // Lấy tất cả account (admin) active
+        const accounts = await Account.find({
+            status: "active",
+            deleted: false
+        });
 
-    usersId.forEach(userId => {
+        const dataChat = {
+            title: "Hỗ trợ khách hàng",
+            typeRoom: "support",
+            users: []
+        };
+
+        // Thêm user vào room
         dataChat.users.push({
             user_id: userId,
             role: "user"
         });
-    }); 
-    dataChat.users.push({
-        user_id: res.locals.user.id,
-        role: "superAdmin"
+
+        // Thêm tất cả account vào room
+        accounts.forEach(account => {
+            dataChat.users.push({
+                user_id: account.id,
+                role: "admin"
+            });
+        });
+
+        supportRoom = new RoomChat(dataChat);
+        await supportRoom.save();
+    }
+
+    // Lấy thông tin accounts trong room
+    const accountIds = supportRoom.users
+        .filter(user => user.role === "admin")
+        .map(user => user.user_id);
+    
+    const accounts = await Account.find({
+        _id: { $in: accountIds },
+        deleted: false
+    }).select("fullName avatar");
+
+    res.render("client/pages/rooms-chat/index", {
+        pageTitle: "Hỗ trợ khách hàng",
+        supportRoom: supportRoom,
+        accounts: accounts
     });
-    const newRoomChat = new RoomChat(dataChat);
-    await newRoomChat.save();
-    res.redirect(`/chat/${newRoomChat.id}`);
+}
+
+//[GET] /rooms-chat/create
+module.exports.create = async (req,res)=>{
+    // Chuyển hướng về trang hỗ trợ chính
+    res.redirect("/rooms-chat");
+}
+
+//[POST] /rooms-chat/create
+module.exports.createPost = async (req,res)=>{
+    // Chuyển hướng về trang hỗ trợ chính
+    res.redirect("/rooms-chat");
 }

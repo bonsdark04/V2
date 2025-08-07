@@ -8,12 +8,15 @@ const OrderSchema = new mongoose.Schema({
         phone: String,
         address: String
     },
+    status: { type: String, default: 'pending' },
     products:[{
         product_id: String,
         price: Number,
         discountPercentage: Number,
         quantity: Number
-    }]
+    }],
+    totalAmount: { type: Number, default: 0 },
+
     },
     {timestamps:true}
     

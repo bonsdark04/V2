@@ -3,13 +3,17 @@ include ../../mixins/box-head.pug
 include ../../mixins/alert.pug
 
 block main
+  div(data-product-id=product._id)
+  script.
+    console.log("Product ID in template:", "#{product._id}");
   +alert-success(2000)
   .product-detail
       .container.my-5
         .row
           .col-6
             .inner-thumb
-              img(src=product.thumbnail, alt=product.title)
+              - const defaultThumbnail = 'http://res.cloudinary.com/darr5at86/image/upload/v1754289825/h8tbdd1ico5eztrmq0ev.png'
+              img(src=(product.thumbnail || defaultThumbnail), alt=product.title)
           .col-6
             h1(class="inner-title") #{product.title}
 
@@ -31,7 +35,7 @@ block main
               div(class="inner-stock") Còn lại <span>#{product.stock}</span> sản phẩm
 
             form(
-              action=`/cart/add/${product.id}`
+              action=`/cart/add/${product._id}`
               method="POST"
             )
               input(
@@ -52,3 +56,54 @@ block main
           .col-12
             +box-head("Mô tả sản phẩm")
             .inner-desc !{product.description}
+      
+      //- Phần bình luận
+      .container.my-5
+        .row
+          .col-12
+            +box-head("Bình luận sản phẩm")
+            
+            //- Form tạo bình luận
+            if user
+              .comment-form.mb-4
+                .card
+                  .card-body
+                    h5.card-title Viết bình luận
+                    form#commentForm
+                      .form-group.mb-3
+                        label(for="rating") Đánh giá:
+                        select#rating.form-control(name="rating")
+                          option(value="5") ⭐⭐⭐⭐⭐ (5 sao)
+                          option(value="4") ⭐⭐⭐⭐ (4 sao)
+                          option(value="3") ⭐⭐⭐ (3 sao)
+                          option(value="2") ⭐⭐ (2 sao)
+                          option(value="1") ⭐ (1 sao)
+                      .form-group.mb-3
+                        label(for="commentContent") Nội dung bình luận:
+                        textarea#commentContent.form-control(name="content" rows="3" placeholder="Viết bình luận của bạn..." required)
+                      button.btn.btn-primary(type="submit") Gửi bình luận
+            else
+              .alert.alert-info
+                | Vui lòng 
+                a(href="/user/login") đăng nhập 
+                | để viết bình luận
+            
+            //- Danh sách bình luận
+            .comments-section
+              #commentsList
+                .text-center
+                  .spinner-border(role="status")
+                    span.sr-only Đang tải...
+              
+              //- Phân trang
+              #commentsPagination.text-center.mt-4
+
+block script
+  if user
+    script.
+      window.currentUserId = "#{user._id}";
+      console.log("Current user ID set:", window.currentUserId);
+  else
+    script.
+      window.currentUserId = null;
+      console.log("No user logged in");

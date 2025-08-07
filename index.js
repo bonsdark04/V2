@@ -35,23 +35,25 @@ app.use(flash());
 
 app.use(express.static(`${__dirname}/public`));
 app.use(methodOverride('_method'));
+app.use(express.json()); 
 app.use(bodyParser.urlencoded({ extended: false }));
 
 //Route
 route(app);
 AdminRoute(app);
-app.get("*", (req, res) => {
-  res.render("client/pages/error/page404", {
-    pageTitle: "404 Not Found",
-  });
-});
+// app.get("*", (req, res) => {
+//   res.render("client/pages/error/page404", {
+//     pageTitle: "404 Not Found",
+//   });
+// });
 //End Route
 
 // SocketIO
 const server = http.createServer(app);
 const io = new Server(server);
 global._io = io;
-
+require("./sockets/client/chat.socket")(io);
+require("./sockets/admin/chat.socket")(io);
 //Variables
 app.locals.prefixAdmin = systemConfig.prefixAdmin;
 app.locals.moment = moment;

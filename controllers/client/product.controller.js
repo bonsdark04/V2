@@ -35,8 +35,10 @@ module.exports.detail = async (req, res) => {
 
 
 
+  console.log("User in product detail:", req.user); // Debug log
   res.render("client/pages/products/detail",{
-    product:product
+    product:product,
+    user: req.user || null
   });
 }
 
