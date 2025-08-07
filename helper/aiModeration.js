@@ -8,11 +8,11 @@ async function moderateComment(content) {
       input: content
     }, {
       headers: {
-        'Authorization': `Bearer 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`,
+        'Authorization': `Bearer `,
         'Content-Type': 'application/json'
       }
     });
-    console.log(response.data);
+    console.log("dsdsdddddddddddddddddddđ",response.data);
     const result = response.data.results[0];
     
     // Kiểm tra các flag vi phạm
