@@ -4,9 +4,10 @@ const methodOverride = require('method-override')
 require('dotenv').config()
 const route = require("./routes/client/index.route.js")
 const AdminRoute = require("./routes/admin/index.route.js");
+const apiRoute = require("./api/routes/index.route.js");
 const database = require("./config/database.js");
 const app = express()
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 const systemConfig = require("./config/system.js");
 const flash = require("express-flash");
 const cookieParser = require("cookie-parser");
@@ -17,7 +18,11 @@ const http = require("http");
 const { Server } = require("socket.io");
 
 
-
+const cors = require('cors');
+app.use(cors({
+  origin: 'http://localhost:3001', // Thay bằng domain frontend của bạn nếu khác
+  credentials: true
+}));
 //TinyMCE
 app.use('/tinymce', express.static(path.join(__dirname, 'node_modules', 'tinymce')));
 //ENd TinyMCE
@@ -41,6 +46,9 @@ app.use(bodyParser.urlencoded({ extended: false }));
 //Route
 route(app);
 AdminRoute(app);
+
+// API Routes
+app.use('/api', apiRoute);
 // app.get("*", (req, res) => {
 //   res.render("client/pages/error/page404", {
 //     pageTitle: "404 Not Found",
