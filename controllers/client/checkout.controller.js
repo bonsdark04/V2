@@ -24,6 +24,24 @@ function sortObject(obj) {
   return sorted;
 }
 
+// Deduct stock for all products in the order and clear the cart
+async function deductStockAndClearCart(orderDoc) {
+  for (const orderedItem of orderDoc.products) {
+    const productId = orderedItem.product_id;
+    const orderedQuantity = Number(orderedItem.quantity) || 0;
+    if (!productId || orderedQuantity <= 0) continue;
+
+    await Product.updateOne(
+      { _id: productId },
+      { $inc: { stock: -orderedQuantity } }
+    );
+  }
+
+  if (orderDoc.cart_id) {
+    await Cart.updateOne({ _id: orderDoc.cart_id }, { products: [] });
+  }
+}
+
 // [GET] /checkout
 module.exports.index = async (req, res) => {
   const cart = await Cart.findOne({ _id: req.cookies.cartId });
@@ -34,9 +52,11 @@ module.exports.index = async (req, res) => {
 
   for (const item of cart.products) {
     const productInfo = await Product.findById(item.product_id);
-    productInfo.priceNew = productsHelper.priceNewProduct(productInfo);
+    // Ensure numeric discounted price and robust total calculation
+    productInfo.priceNew = Number(productsHelper.priceNewProduct(productInfo));
     item.productInfo = productInfo;
-    item.totalPrice = item.quantity * productInfo.priceNew;
+    const qtyNumber = Number(item.quantity) || 0;
+    item.totalPrice = productInfo.priceNew * qtyNumber;
   }
 
   cart.totalPrice = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -66,6 +86,8 @@ module.exports.order = async (req, res) => {
       price: productInfo.price,
       discountPercentage: productInfo.discountPercentage,
       quantity: product.quantity,
+      title: productInfo.title,
+      thumbnail: productInfo.thumbnail,
     });
   }
 
@@ -86,7 +108,7 @@ module.exports.order = async (req, res) => {
   if (paymentMethod === "cod") {
     order.status = "paid";
     await order.save();
-    await Cart.updateOne({ _id: order.cart_id }, { products: [] });
+    await deductStockAndClearCart(order);
 
     req.flash("success", "Đặt hàng thành công!");
     return res.redirect(`/checkout/success/${order._id}`);
@@ -97,7 +119,7 @@ module.exports.order = async (req, res) => {
       orderId: order._id.toString(),
       amount: totalAmount,
       orderInfo,
-      returnUrl: "http://localhost:3000/vnpay_return",
+      returnUrl: "http://localhost:3000/checkout/vnpay-return",
     });
     
     return res.redirect(paymentUrl);
@@ -112,13 +134,22 @@ module.exports.success = async (req, res) => {
   const order = await Order.findById(req.params.id);
 
   for (const product of order.products) {
-    const productInfo = await Product.findById(product.product_id).select("title thumbnail");
+    // Fetch product info including pricing fields to ensure accurate display
+    const productInfo = await Product
+      .findById(product.product_id)
+      .select("title thumbnail price discountPercentage");
+
     product.productInfo = productInfo;
-    product.priceNew = productsHelper.priceNewProduct(product);
-    product.totalPrice = product.quantity * product.priceNew;
+
+    // Compute discounted price from the latest product info
+    const computedPriceNew = Number(productsHelper.priceNewProduct(productInfo));
+    const quantityNumber = Number(product.quantity) || 0;
+
+    product.priceNew = computedPriceNew;
+    product.totalPrice = computedPriceNew * quantityNumber;
   }
 
-  order.totalPrice = order.products.reduce((sum, item) => sum + item.totalPrice, 0);
+  order.totalPrice = order.products.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
 
   res.render("client/pages/checkout/success", {
     pageTitle: "Đặt hàng thành công",
@@ -145,6 +176,14 @@ module.exports.vnpayReturn = async (req, res) => {
 
   if (secureHash === hash) {
     if (vnp_Params["vnp_ResponseCode"] === "00") {
+      const orderId = vnp_Params["vnp_TxnRef"];
+      const order = await Order.findById(orderId);
+      if (!order) return res.status(404).send("❌ Không tìm thấy đơn hàng.");
+
+      order.status = "paid";
+      await order.save();
+      await deductStockAndClearCart(order);
+
       return res.send("✅ Thanh toán thành công!");
     } else {
       return res.send("❌ Giao dịch thất bại.");

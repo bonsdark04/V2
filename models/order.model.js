@@ -13,7 +13,9 @@ const OrderSchema = new mongoose.Schema({
         product_id: String,
         price: Number,
         discountPercentage: Number,
-        quantity: Number
+        quantity: Number,
+        title: String,
+        thumbnail: String
     }],
     totalAmount: { type: Number, default: 0 },
 

@@ -12,8 +12,11 @@ const searchRoute = require('./search.route');
 const chatRoute = require('./chat.route');
 const usersRoute = require('./users.route');
 const roomsChatRoute = require('./roomsChat.route');
+const cartMiddleware = require('../../middlewares/client/cart.middleware');
 
 // Định nghĩa các route
+// Đảm bảo luôn có cookie cartId cho các request API (phục vụ React client)
+router.use(cartMiddleware.cartId);
 router.use('/home', homeRoute);
 router.use('/products', productRoute);
 router.use('/cart', cartRoute);

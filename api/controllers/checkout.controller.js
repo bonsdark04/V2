@@ -24,10 +24,67 @@ function sortObject(obj) {
   return sorted;
 }
 
+// Deduct stock for all products in the order and clear the cart
+async function deductStockAndClearCart(orderDoc) {
+  // Decrement stock atomically to avoid race conditions
+  for (const orderedItem of orderDoc.products) {
+    const productId = orderedItem.product_id;
+    const orderedQuantity = Number(orderedItem.quantity) || 0;
+    if (!productId || orderedQuantity <= 0) continue;
+
+    await Product.updateOne(
+      { _id: productId },
+      { $inc: { stock: -orderedQuantity } }
+    );
+  }
+
+  // Clear cart after successful payment
+  if (orderDoc.cart_id) {
+    await Cart.updateOne({ _id: orderDoc.cart_id }, { products: [] });
+  }
+}
+
+// [GET] /api/checkout
+// module.exports.index = async (req, res) => {
+//   try {
+//     const cart = await Cart.findOne({ _id: req.cookies.cartId });
+
+//     if (!cart || cart.products.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Giỏ hàng trống"
+//       });
+//     }
+
+//     for (const item of cart.products) {
+//       const productInfo = await Product.findById(item.product_id);
+//       if (productInfo) {
+//         productInfo.priceNew = productsHelper.priceNewProduct(productInfo);
+//         item.productInfo = productInfo;
+//         item.totalPrice = item.quantity * productInfo.priceNew;
+//       }
+//     }
+
+//     cart.totalPrice = cart.products.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+
+//     res.json({
+//       success: true,
+//       data: {
+//         cart: cart
+//       }
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Lỗi server",
+//       error: error.message
+//     });
+//   }
+// };
 // [GET] /api/checkout
 module.exports.index = async (req, res) => {
   try {
-    const cart = await Cart.findOne({ _id: req.cookies.cartId });
+    let cart = await Cart.findOne({ _id: req.cookies.cartId });
 
     if (!cart || cart.products.length === 0) {
       return res.status(400).json({
@@ -36,21 +93,50 @@ module.exports.index = async (req, res) => {
       });
     }
 
-    for (const item of cart.products) {
-      const productInfo = await Product.findById(item.product_id);
-      if (productInfo) {
-        productInfo.priceNew = productsHelper.priceNewProduct(productInfo);
-        item.productInfo = productInfo;
-        item.totalPrice = item.quantity * productInfo.priceNew;
-      }
+    // Hợp nhất các mục trùng product_id để tránh bị nhân đôi giữa các lần đồng bộ
+    const mergedById = new Map();
+    for (const p of cart.products) {
+      const prev = mergedById.get(p.product_id) || 0;
+      mergedById.set(p.product_id, prev + (Number(p.quantity) || 0));
+    }
+    const normalized = Array.from(mergedById.entries()).map(([product_id, quantity]) => ({ product_id, quantity }));
+    if (normalized.length !== cart.products.length) {
+      await Cart.updateOne({ _id: cart._id }, { products: normalized });
+      cart.products = normalized;
     }
 
-    cart.totalPrice = cart.products.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+    // Lấy thông tin sản phẩm theo lô và dựng DTO trả về
+    const ids = cart.products.map(p => p.product_id);
+    const products = await Product.find({ _id: { $in: ids } })
+      .select("title thumbnail price discountPercentage");
+    const byId = new Map(products.map(p => [p._id.toString(), p]));
+
+    const productsDto = cart.products.map((item) => {
+      const p = byId.get(item.product_id.toString());
+      if (!p) {
+        return { product_id: item.product_id, quantity: item.quantity, productInfo: null, totalPrice: 0 };
+      }
+      const priceNew = Number(productsHelper.priceNewProduct(p));
+      return {
+        product_id: item.product_id,
+        quantity: item.quantity,
+        productInfo: {
+          title: p.title,
+          thumbnail: p.thumbnail,
+          price: p.price,
+          discountPercentage: p.discountPercentage,
+          priceNew
+        },
+        totalPrice: priceNew * Number(item.quantity || 0)
+      };
+    });
+
+    const totalPrice = productsDto.reduce((sum, it) => sum + (Number(it.totalPrice) || 0), 0);
 
     res.json({
       success: true,
       data: {
-        cart: cart
+        cart: { _id: cart._id, products: productsDto, totalPrice }
       }
     });
   } catch (error) {
@@ -85,6 +171,8 @@ module.exports.order = async (req, res) => {
         price: productInfo.price,
         discountPercentage: productInfo.discountPercentage,
         quantity: product.quantity,
+        title: productInfo.title,
+        thumbnail: productInfo.thumbnail,
       });
     }
 
@@ -105,7 +193,7 @@ module.exports.order = async (req, res) => {
     if (paymentMethod === "cod") {
       order.status = "paid";
       await order.save();
-      await Cart.updateOne({ _id: order.cart_id }, { products: [] });
+      await deductStockAndClearCart(order);
 
       res.json({
         success: true,
@@ -162,13 +250,26 @@ module.exports.success = async (req, res) => {
     }
 
     for (const product of order.products) {
-      const productInfo = await Product.findById(product.product_id).select("title thumbnail");
-      product.productInfo = productInfo;
-      product.priceNew = productsHelper.priceNewProduct(product);
-      product.totalPrice = product.quantity * product.priceNew;
+      // Prefer data embedded in order to avoid missing refs
+      const productInfo = await Product
+        .findById(product.product_id)
+        .select("title thumbnail price discountPercentage");
+
+      const title = product.title || productInfo?.title || null;
+      const thumbnail = product.thumbnail || productInfo?.thumbnail || null;
+      const basePrice = product.price ?? productInfo?.price ?? 0;
+      const baseDiscount = product.discountPercentage ?? productInfo?.discountPercentage ?? 0;
+
+      product.productInfo = title || thumbnail ? { title, thumbnail, price: basePrice, discountPercentage: baseDiscount } : null;
+
+      const computedPriceNew = Number(((basePrice * (100 - baseDiscount)) / 100).toFixed(0));
+      const quantityNumber = Number(product.quantity) || 0;
+
+      product.priceNew = computedPriceNew;
+      product.totalPrice = computedPriceNew * quantityNumber;
     }
 
-    order.totalPrice = order.products.reduce((sum, item) => sum + item.totalPrice, 0);
+    order.totalPrice = order.products.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
 
     res.json({
       success: true,
@@ -201,26 +302,31 @@ module.exports.vnpayReturn = async (req, res) => {
     const signData = querystring.stringify(vnp_Params, { encode: false });
     const hash = crypto.createHmac("sha512", secretKey).update(signData).digest("hex");
 
-    if (secureHash === hash) {
-      if (vnp_Params["vnp_ResponseCode"] === "00") {
-        // Cập nhật trạng thái đơn hàng
-        const orderId = vnp_Params["vnp_TxnRef"];
-        await Order.updateOne(
-          { _id: orderId },
-          { status: "paid" }
-        );
-        
-        res.json({
-          success: true,
-          message: "Thanh toán thành công!"
-        });
+      if (secureHash === hash) {
+        if (vnp_Params["vnp_ResponseCode"] === "00") {
+          // Cập nhật trạng thái đơn hàng và trừ kho, xóa giỏ hàng
+          const orderId = vnp_Params["vnp_TxnRef"];
+
+          const order = await Order.findById(orderId);
+          if (!order) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng" });
+          }
+
+          order.status = "paid";
+          await order.save();
+          await deductStockAndClearCart(order);
+
+          return res.json({
+            success: true,
+            message: "Thanh toán thành công!"
+          });
+        } else {
+          return res.json({
+            success: false,
+            message: "Giao dịch thất bại."
+          });
+        }
       } else {
-        res.json({
-          success: false,
-          message: "Giao dịch thất bại."
-        });
-      }
-    } else {
       res.status(400).json({
         success: false,
         message: "Chữ ký không hợp lệ!"

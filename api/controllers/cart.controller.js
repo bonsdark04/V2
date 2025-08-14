@@ -2,59 +2,39 @@ const Cart = require("../../models/cart.model");
 const Product = require("../../models/product.model");
 const productsHelper = require("../../helper/product");
 
-//[POST] /api/cart/add/:productId
+// [POST] /api/cart/add/:productId
 module.exports.addPost = async (req, res) => {
   try {
-    const cartId = req.cookies.cartId;
-    const productId = req.params.productId;
+    let cartId = req.cookies.cartId;
+    const productId = req.params.productId; // keep as string to match Cart schema
     const quantity = parseInt(req.body.quantity);
 
     if (!cartId) {
-      return res.status(400).json({
-        success: false,
-        message: "Không tìm thấy giỏ hàng"
-      });
+      const newCart = new Cart();
+      await newCart.save();
+      const expiresTime = 1000 * 60 * 60 * 24 * 365;
+      res.cookie("cartId", newCart.id, { expires: new Date(Date.now() + expiresTime) });
+      cartId = newCart.id;
     }
 
-    const cart = await Cart.findOne({
-      _id: cartId
-    });
-
+    // Tìm cart và update nếu sản phẩm đã tồn tại, nếu không thì thêm mới
+    let cart = await Cart.findOne({ _id: cartId });
     if (!cart) {
-      return res.status(404).json({
-        success: false,
-        message: "Giỏ hàng không tồn tại"
-      });
+      cart = new Cart();
+      await cart.save();
+      const expiresTime = 1000 * 60 * 60 * 24 * 365;
+      res.cookie("cartId", cart.id, { expires: new Date(Date.now() + expiresTime) });
     }
 
-    const exitProductInCart = cart.products.find(item => item.product_id == productId);
-    
-    if(exitProductInCart){
-      const newQuantity = quantity + exitProductInCart.quantity;
-      await Cart.updateOne(
-        {
-          _id: cartId,
-          'products.product_id': productId
-        },
-        {
-          'products.$.quantity': newQuantity
-        }
-      );
+    const existingItem = cart.products.find(p => String(p.product_id) === String(productId));
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
     } else {
-      const objectCart = {
-        product_id: productId,
-        quantity: quantity
-      };
-  
-      await Cart.updateOne(
-        {
-          _id: cartId
-        },
-        {
-          $push: { products: objectCart }
-        }
-      );
+      cart.products.push({ product_id: String(productId), quantity });
     }
+
+    await cart.save();
 
     res.json({
       success: true,
@@ -69,26 +49,36 @@ module.exports.addPost = async (req, res) => {
   }
 };
 
-//[GET] /api/cart
+// [GET] /api/cart
 module.exports.cart = async (req, res) => {
   try {
-    const cart = await Cart.findOne({
-      _id: req.cookies.cartId
-    });
+    let cart = await Cart.findOne({ _id: req.cookies.cartId });
 
     if (!cart) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy giỏ hàng"
-      });
+      cart = new Cart();
+      await cart.save();
+      const expiresTime = 1000 * 60 * 60 * 24 * 365;
+      res.cookie("cartId", cart.id, { expires: new Date(Date.now() + expiresTime) });
     }
 
-    if(cart.products.length > 0 ){
-      for(const item of cart.products){
-        const productInfo = await Product.findOne({
-          _id: item.product_id
-        });
-        
+    if (cart.products && cart.products.length > 0) {
+      // Hợp nhất số lượng nếu có trùng product_id (phòng trường hợp dữ liệu cũ bị lỗi)
+      const mergedById = new Map();
+      for (const p of cart.products) {
+        const key = String(p.product_id);
+        const prev = mergedById.get(key) || 0;
+        mergedById.set(key, prev + (Number(p.quantity) || 0));
+      }
+      const normalized = Array.from(mergedById.entries()).map(([product_id, quantity]) => ({ product_id, quantity }));
+
+      if (normalized.length !== cart.products.length) {
+        await Cart.updateOne({ _id: cart._id }, { products: normalized });
+        cart.products = normalized;
+      }
+
+      // Lấy thông tin sản phẩm
+      for (const item of cart.products) {
+        const productInfo = await Product.findOne({ _id: item.product_id });
         if (productInfo) {
           productInfo.priceNew = productsHelper.priceNewProduct(productInfo);
           item.productInfo = productInfo;
@@ -101,9 +91,7 @@ module.exports.cart = async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        cart: cart
-      }
+      data: { cart }
     });
   } catch (error) {
     res.status(500).json({
@@ -114,18 +102,16 @@ module.exports.cart = async (req, res) => {
   }
 };
 
-//[DELETE] /api/cart/delete/:productId
+// [DELETE] /api/cart/delete/:productId
 module.exports.delete = async (req, res) => {
   try {
     const cartId = req.cookies.cartId;
     const productId = req.params.productId;
-    
-    await Cart.updateOne({
-      _id: cartId
-    },
-    {
-      "$pull": {products: { "product_id": productId}}
-    });
+
+    await Cart.updateOne(
+      { _id: cartId },
+      { $pull: { products: { product_id: String(productId) } } }
+    );
 
     res.json({
       success: true,
@@ -140,23 +126,26 @@ module.exports.delete = async (req, res) => {
   }
 };
 
-//[PUT] /api/cart/update/:productId/:quantity
+// [PUT] /api/cart/update/:productId/:quantity
 module.exports.update = async (req, res) => {
   try {
-    const cartId = req.cookies.cartId;
+    let cartId = req.cookies.cartId;
     const productId = req.params.productId;
     const quantity = parseInt(req.params.quantity);
 
+    if (!cartId) {
+      const newCart = new Cart();
+      await newCart.save();
+      const expiresTime = 1000 * 60 * 60 * 24 * 365;
+      res.cookie("cartId", newCart.id, { expires: new Date(Date.now() + expiresTime) });
+      cartId = newCart.id;
+    }
+
     await Cart.updateOne(
-      {
-        _id: cartId,
-        'products.product_id': productId
-      },
-      {
-        'products.$.quantity': quantity
-      }
+      { _id: cartId, 'products.product_id': String(productId) },
+      { $set: { 'products.$.quantity': quantity } }
     );
-    
+
     res.json({
       success: true,
       message: "Cập nhật số lượng thành công"

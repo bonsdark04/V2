@@ -42,10 +42,13 @@ block main
               .inner-body.p-3(style="height: 400px; overflow-y: auto;")
                 if chats && chats.length > 0
                   each chat in chats
-                    - const isAdmin = chat.infoUser.role === "admin" || chat.infoUser._id.toString() === user.id.toString()
-                    div(class=isAdmin ? "inner-outgoing" : "inner-incoming")
-                      if !isAdmin
-                        .inner-name= chat.infoUser.fullName
+                    - var isAdminMsg = (chat.user_id == user.id)
+                    div(class=isAdminMsg ? "inner-outgoing" : "inner-incoming")
+                      if !isAdminMsg
+                        if chat.infoUser && chat.infoUser.fullName
+                          .inner-name= chat.infoUser.fullName
+                        else
+                          .inner-name Người dùng
                       if chat.content
                         .inner-content= chat.content
                       if chat.images && chat.images.length > 0

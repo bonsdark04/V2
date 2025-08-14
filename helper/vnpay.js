@@ -28,7 +28,8 @@ function createPaymentUrl(orderId, amount, orderInfo) {
     vnp_OrderInfo: orderId.orderInfo,
     vnp_OrderType: "billpayment",
     vnp_Amount: orderId.amount * 100,
-    vnp_ReturnUrl: "http://localhost:3000/checkout/vnpay-return",
+    // Ưu tiên dùng returnUrl truyền vào, fallback về route phía client render nếu không có
+    vnp_ReturnUrl: orderId.returnUrl || "http://localhost:3000/checkout/vnpay-return",
     vnp_IpAddr: "127.0.0.1",
     vnp_CreateDate: createDate,
   };

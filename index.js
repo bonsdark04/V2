@@ -19,8 +19,14 @@ const { Server } = require("socket.io");
 
 
 const cors = require('cors');
+// Allow both admin (3000) and React client (3001)
+const allowedOrigins = ['http://localhost:3001', 'http://localhost:3000'];
 app.use(cors({
-  origin: 'http://localhost:3001', // Thay bằng domain frontend của bạn nếu khác
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow same-origin and server-to-server
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
   credentials: true
 }));
 //TinyMCE
@@ -58,7 +64,14 @@ app.use('/api', apiRoute);
 
 // SocketIO
 const server = http.createServer(app);
-const io = new Server(server);
+// Socket.IO with CORS for React client on 3001
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
 global._io = io;
 require("./sockets/client/chat.socket")(io);
 require("./sockets/admin/chat.socket")(io);

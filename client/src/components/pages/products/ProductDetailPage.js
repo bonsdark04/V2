@@ -20,7 +20,8 @@ const ProductDetailPage = () => {
         const response = await axios.get(`/products/${slug}`);
         
         if (response.data.success) {
-          setProduct(response.data.data);
+         console.log("sdddddddddđ",response.data.data.product);
+          setProduct(response.data.data.product);
         } else {
           setError('Không tìm thấy sản phẩm');
         }
@@ -42,14 +43,14 @@ const ProductDetailPage = () => {
 
     const cart = JSON.parse(localStorage.getItem('cart') || '{}');
     const productId = product._id;
-    
+   
     if (cart[productId]) {
       cart[productId].quantity += quantity;
     } else {
       cart[productId] = {
         id: product._id,
         title: product.title,
-        price: product.price,
+        price: product.price * (1 - product.discountPercentage / 100) ?? product.price,
         thumbnail: product.thumbnail,
         quantity: quantity
       };
@@ -124,11 +125,11 @@ const ProductDetailPage = () => {
           
           <div className="mb-3">
             <span className="h3 text-primary me-3">
-              ${product.price?.toLocaleString()}
+              ${Number(product.price * (1 - product.discountPercentage / 100) ?? product.price)?.toLocaleString()}
             </span>
             {product.discountPercentage > 0 && (
               <span className="h5 text-muted text-decoration-line-through">
-                ${(product.price * (1 + product.discountPercentage / 100)).toLocaleString()}
+                ${Number(product.price).toLocaleString()}
               </span>
             )}
           </div>
@@ -190,7 +191,7 @@ const ProductDetailPage = () => {
             
             <Button 
               variant="outline-primary" 
-              onClick={() => navigate('/products')}
+              onClick={() => navigate('/')}
             >
               Quay lại danh sách sản phẩm
             </Button>

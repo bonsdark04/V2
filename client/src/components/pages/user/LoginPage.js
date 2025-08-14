@@ -63,10 +63,12 @@ const LoginPage = () => {
       setError('');
 
       const response = await axios.post('/user/login', formData);
-      
+      console.log('Login response:', response.data);
       if (response.data.success) {
         // Store token in cookie
-        cookie.save('tokenUser', response.data.data.token, { path: '/' });
+        cookie.save('tokenUser', response.data.data.user.tokenUser, { path: '/' });
+        // Save user to localStorage for chat alignment
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
         
         // Update user context
         dispatch({

@@ -48,6 +48,15 @@ module.exports.cart = async (req,res)=>{
     _id: req.cookies.cartId
   });
   if(cart.products.length > 0 ){
+    // Normalize duplicates by product_id to avoid quantity doubling between pages
+    const mergedById = new Map();
+    for (const p of cart.products) {
+      const prev = mergedById.get(p.product_id) || 0;
+      mergedById.set(p.product_id, prev + (Number(p.quantity) || 0));
+    }
+    cart.products = Array.from(mergedById.entries()).map(([product_id, quantity]) => ({ product_id, quantity }));
+    await Cart.updateOne({ _id: cart._id }, { products: cart.products });
+
     for(const item of cart.products){
       const productInfo = await Product.findOne({
         _id: item.product_id
